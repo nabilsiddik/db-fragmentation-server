@@ -42,7 +42,7 @@ course_db_2.connect(err => {
 // Course Related API
 // Get course
 app.get('/courses', (req, res) => {
-  const query = 'SELECT * FROM course';
+  const query = 'SELECT * FROM free_course';
   course_db_1.query(query, (err, results) => {
     if (err) throw err;
     res.json(results);
@@ -51,18 +51,62 @@ app.get('/courses', (req, res) => {
 
 
 
+
+
+
+// Get both free and premium courses
+app.get('/all-courses', (req, res) => {
+  const freeCoursesQuery = 'SELECT * FROM free_course';
+  const premiumCoursesQuery = 'SELECT * FROM premium_course';
+
+  // Fetch free courses from course_db_1
+  course_db_1.query(freeCoursesQuery, (err, freeCourses) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: 'Failed to fetch free courses' });
+    }
+
+    // Fetch premium courses from course_db_2
+    course_db_2.query(premiumCoursesQuery, (err, premiumCourses) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Failed to fetch premium courses' });
+      }
+
+      // Combine both free and premium courses
+      const allCourses = [...freeCourses, ...premiumCourses];
+
+      // Send all courses as response
+      res.json(allCourses);
+    });
+  });
+});
+
+
+
+
+
+
+
 // Post course
 app.post('/courses', (req, res) => {
   const { title, thumbnailUrl, description, price, category } = req.body;
 
+
+  // Fragmentation condition
   let targetDatabase;
+  let targetedTable;
   if (parseInt(price) === 0) {
     targetDatabase = course_db_1;
+    targetedTable = 'free_course'
   } else {
     targetDatabase = course_db_2;
+    targetedTable = 'premium_course'
   }
 
-  const query = 'INSERT INTO course (title, thumbnailUrl, description, price, category) VALUES (?, ?, ?, ?, ?)';
+  const query = `INSERT INTO ${targetedTable} (title, thumbnailUrl, description, price, category) VALUES (?, ?, ?, ?, ?)`;
+
+  console.log(query)
 
   targetDatabase.query(query, [title, thumbnailUrl, description, price, category], (err, result) => {
     if (err) {
@@ -72,9 +116,6 @@ app.post('/courses', (req, res) => {
     res.status(201).json({ message: 'Course added successfully', courseId: result.insertId });
   });
 });
-
-
-
 
 
 
@@ -113,14 +154,45 @@ user_db_2.connect(err => {
 
 
 
-// Get users
-app.get('/users', (req, res) => {
-  const query = 'SELECT * FROM users';
-  user_db_1.query(query, (err, results) => {
-    if (err) throw err;
-    res.json(results);
+
+
+// Post user
+app.post('/users', (req, res) => {
+  const { name, photoUrl, email, password, userRole } = req.body;
+
+
+  // Fragmentation condition
+  let targetDatabase;
+  let targetedTable;
+  
+  // Check the user role and determine which database and table to use
+  if (userRole === 'instructor') {
+    targetDatabase = user_db_1;  // Use user_db_1 for instructors
+    targetedTable = 'instructors';
+  } else {
+    targetDatabase = user_db_2;  // Use user_db_2 for students
+    targetedTable = 'students';
+  }
+
+  const query = `INSERT INTO ${targetedTable} (name, photoUrl, email, password, userRole) VALUES (?, ?, ?, ?, ?)`;
+
+
+  targetDatabase.query(query, [name, photoUrl, email, password, userRole], (err, result) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: 'Failed to add user' });
+    }
+    res.status(201).json({ message: 'User added successfully', userId: result.insertId });
   });
 });
+
+
+
+
+
+
+
+
 
 
 app.get('/', (req, res) => {
